@@ -1,0 +1,33 @@
+{
+    "name": "cyve/json-decoder",
+    "description": "Helper for self-json-decodable object",
+    "keywords": ["serializer", "normalizer", "json"],
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Cyril Vermande",
+            "homepage": "https://cyve.github.io"
+        }
+    ],
+    "require": {
+        "php": ">=8.1"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.5",
+        "symfony/var-dumper": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Cyve\\JsonDecoder\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Cyve\\JsonDecoder\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
