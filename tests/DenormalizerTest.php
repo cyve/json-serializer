@@ -4,6 +4,7 @@ namespace Cyve\JsonDecoder\Tests;
 
 use Cyve\JsonDecoder\Denormalizer;
 use Cyve\JsonDecoder\Tests\Model\Author;
+use Cyve\JsonDecoder\Tests\Model\Comment;
 use Cyve\JsonDecoder\Tests\Model\Post;
 use Cyve\JsonDecoder\Tests\Model\Status;
 use PHPUnit\Framework\TestCase;
@@ -26,6 +27,10 @@ class DenormalizerTest extends TestCase
                 'name' => 'Cyril',
             ],
             'picture' => 'http://fakeimg.pl/300x300',
+            'comments' => [
+                ['body' => 'Lorem ipsum'],
+                ['body' => 'Sit dolor amet'],
+            ],
             'tags' => ['php'],
             'views' => 301,
             'highlight' => true,
@@ -39,11 +44,16 @@ class DenormalizerTest extends TestCase
             'modificationDate' => '2000-01-02T00:00:00+01:00',
         ];
         $post = $this->denormalizer->denormalize($input, Post::class);
+//        dump($post);
 
         $this->assertEquals('Lorem ipsum', $post->title);
         $this->assertInstanceOf(Author::class, $post->author);
         $this->assertEquals('Cyril', $post->author->name);
         $this->assertEquals('http://fakeimg.pl/300x300', $post->picture);
+        $this->assertCount(2, $post->comments);
+        $this->assertContainsOnlyInstancesOf(Comment::class, $post->comments);
+        $this->assertEquals('Lorem ipsum', $post->comments[0]->body);
+        $this->assertEquals('Sit dolor amet', $post->comments[1]->body);
         $this->assertEquals(['php'], $post->tags);
         $this->assertEquals((object) ['ogTitle' => 'Lorem ipsum'], $post->opengraph);
         $this->assertEquals(301, $post->views);
@@ -63,7 +73,8 @@ class DenormalizerTest extends TestCase
         $this->assertInstanceOf(Author::class, $post->author);
         $this->assertEquals('Cyril', $post->author->name);
         $this->assertNull($post->picture);
-        $this->assertEquals([], $post->tags);
+        $this->assertCount(0, $post->comments);
+        $this->assertCount(0, $post->tags);
         $this->assertEquals(new \stdClass(), $post->opengraph);
         $this->assertEquals(0, $post->views);
         $this->assertEquals(false, $post->highlight);
@@ -79,24 +90,26 @@ class DenormalizerTest extends TestCase
         $metadata = $this->denormalizer->getMetadata(Post::class);
 
         $expected = [
-            ['title', 'string', false, true],
-            ['author', Author::class, false, true],
-            ['picture', 'string', true, false],
-            ['tags', 'array', false, false],
-            ['views', 'int', false, false],
-            ['highlight', 'bool', false, false],
-            ['opengraph', 'object', false, false],
-            ['status', Status::class, false, false],
-            ['creationDate', \DateTime::class, false, false],
-            ['modificationDate', \DateTime::class, false, false],
+            ['title', 'string', false, true, null],
+            ['author', Author::class, false, true, null],
+            ['picture', 'string', true, false, null],
+            ['comments', \ArrayIterator::class, false, false, Comment::class],
+            ['tags', 'array', false, false, null],
+            ['views', 'int', false, false, null],
+            ['highlight', 'bool', false, false, null],
+            ['opengraph', 'object', false, false, null],
+            ['status', Status::class, false, false, null],
+            ['creationDate', \DateTime::class, false, false, null],
+            ['modificationDate', \DateTime::class, false, false, null],
         ];
 
         foreach ($metadata->properties as $i => $property) {
-            [$name, $type, $nullable, $required] = $expected[$i];
+            [$name, $type, $nullable, $required, $collectionOf] = $expected[$i];
             $this->assertEquals($name, $property->name);
             $this->assertEquals($type, $property->type);
             $this->assertEquals($nullable, $property->nullable);
             $this->assertEquals($required, $property->required);
+            $this->assertEquals($collectionOf, $property->collectionOf);
         }
     }
 }

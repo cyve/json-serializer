@@ -2,11 +2,12 @@
 
 namespace Cyve\JsonDecoder;
 
+use Cyve\JsonDecoder\Attribute\Collection;
+
 class Denormalizer
 {
     /**
      * TODO:
-     * - collections
      * - interfaces
      * - PHP native classes (DateInterval, SplObjectStorage, etc.)
      */
@@ -25,6 +26,14 @@ class Denormalizer
                 continue;
             }
             $value = $input[$property->name];
+
+            if (null !== $property->collectionOf) {
+                $arguments[$property->name] = ($property->type === 'array') ? [] : new $property->type();
+                foreach ($value as $item) {
+                    $arguments[$property->name][] = $this->denormalize($item, $property->collectionOf);
+                }
+                continue;
+            }
 
             if (\DateTime::class === $property->type) {
                 if (is_string($value)) {
@@ -66,10 +75,18 @@ class Denormalizer
             $reflectionType = $reflectionParameter->getType();
             $property = [
                 'name' => $reflectionParameter->getName(),
-                'type' => $reflectionType?->getName(),
-                'nullable' => $reflectionType?->allowsNull() ?? false,
+                'type' => $reflectionType->getName(),
+                'nullable' => $reflectionType->allowsNull() ?? false,
                 'required' => false,
+                'collectionOf' => null,
             ];
+
+            if ('array' === $reflectionType->getName() || !$reflectionType->isBuiltin() && in_array(\ArrayAccess::class, class_implements($reflectionType->getName()))) {
+                if ([] !== $attributes = array_filter($reflectionParameter->getAttributes(), fn ($attribute) => $attribute->getName() === Collection::class)) {
+                    $attribute = reset($attributes);
+                    $property['collectionOf'] = $attribute->getArguments()[0];
+                }
+            }
 
             try {
                 $reflectionParameter->getDefaultValue();

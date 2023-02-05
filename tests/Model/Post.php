@@ -2,6 +2,7 @@
 
 namespace Cyve\JsonDecoder\Tests\Model;
 
+use Cyve\JsonDecoder\Attribute\Collection;
 use Cyve\JsonDecoder\JsonDecodableTrait;
 
 class Post
@@ -12,8 +13,8 @@ class Post
         public string $title,
         public Author $author,
         public ?string $picture = null,
-//        #[Collection(Comment::class)]
-//        public array $comments = [],
+        #[Collection(Comment::class)]
+        public \ArrayIterator $comments = new \ArrayIterator(),
         public array $tags = [],
         public int $views = 0,
         public bool $highlight = false,
