@@ -11,105 +11,107 @@ use PHPUnit\Framework\TestCase;
 
 class DenormalizerTest extends TestCase
 {
-    private Denormalizer $denormalizer;
-
-    protected function setUp(): void
+    /**
+     * @testWith [1, "int"]
+     *           [1.1, "float"]
+     *           ["foo", "string"]
+     *           [true, "bool"]
+     */
+    public function testDenormalizeScalar($value, $type)
     {
-        $this->denormalizer = new Denormalizer();
+        $this->assertEquals($value, (new Denormalizer())->denormalize($value, $type));
     }
 
-    public function testDenormalize()
+    /**
+     * @testWith [{"foo": "bar"}, "object"]
+     *           [["foo", "bar"], "array"]
+     */
+    public function testDenormalizeComposite($value, $type)
     {
-//        $json = '{"title":"Lorem ipsum","picture":null,"author":{"name":"Cyril"},"creationDate":{"date":"2023-01-27 23:43:13","timezone_type":3,"timezone":"Europe/Paris"},"status":"published","tags":["php"],"views":100,"highlight":true,"picture":null}';
-        $input = [
+        $this->assertEquals($value, (new Denormalizer())->denormalize($value, $type));
+    }
+
+    public function testDenormalizeEnum()
+    {
+        $this->assertEquals(Status::Draft, (new Denormalizer())->denormalize('draft', Status::class));
+    }
+
+    public function testDenormalizeDateTime()
+    {
+        $result = (new Denormalizer())->denormalize('1970-01-01T00:00:00+01:00', \DateTime::class);
+
+        $this->assertEquals(new \DateTime('1970-01-01T00:00:00+01:00'), $result);
+    }
+
+    public function testDenormalizeDateTimeImmutable()
+    {
+        $result = (new Denormalizer())->denormalize('1970-01-01T00:00:00+01:00', \DateTimeImmutable::class);
+
+        $this->assertEquals(new \DateTimeImmutable('1970-01-01T00:00:00+01:00'), $result);
+    }
+
+    public function testDenormalizeDateTimeZone()
+    {
+        $result = (new Denormalizer())->denormalize('Europe/Paris', \DateTimeZone::class);
+
+        $this->assertEquals(new \DateTimeZone('Europe/Paris'), $result);
+    }
+
+    public function testDenormalizeDateInterval()
+    {
+        $result = (new Denormalizer())->denormalize('P1D', \DateInterval::class);
+
+        $this->assertEquals(new \DateInterval('P1D'), $result);
+    }
+
+    public function testDenormalizeObject()
+    {
+        $result = (new Denormalizer())->denormalize((object) ['name' => 'John Doe'], Author::class);
+
+        $this->assertEquals(new Author('John Doe'), $result);
+    }
+
+    public function testDenormalizeAggregate()
+    {
+        $input = (object) [
             'title' => 'Lorem ipsum',
-            'author' => [
-                'name' => 'Cyril',
-            ],
+            'author' => (object) ['name' => 'John Doe'],
             'picture' => 'http://fakeimg.pl/300x300',
             'comments' => [
-                ['body' => 'Lorem ipsum'],
-                ['body' => 'Sit dolor amet'],
+                (object) [
+                    'body' => 'Lorem ipsum',
+                    'author' => (object) ['name' => 'Jane Doe'],
+                    'creationDate' => '2000-01-01T00:00:00+01:00',
+                ],
+                (object) [
+                    'body' => 'Sit dolor amet',
+                    'author' => (object) ['name' => 'Jane Doe'],
+                    'creationDate' => '2000-01-01T00:00:00+01:00',
+                ],
             ],
             'tags' => ['php'],
             'views' => 301,
             'highlight' => true,
             'opengraph' => (object) ['ogTitle' => 'Lorem ipsum'],
             'status' => 'published',
-            'creationDate' => [
-                'date' => '2000-01-01 00:00:00',
-                'timezone_type' => 3,
-                'timezone' => 'Europe/Paris',
-            ],
+            'creationDate' => '2000-01-01T00:00:00+01:00',
             'modificationDate' => '2000-01-02T00:00:00+01:00',
         ];
-        $post = $this->denormalizer->denormalize($input, Post::class);
+        $post = (new Denormalizer())->denormalize($input, Post::class);
 //        dump($post);
 
         $this->assertEquals('Lorem ipsum', $post->title);
-        $this->assertInstanceOf(Author::class, $post->author);
-        $this->assertEquals('Cyril', $post->author->name);
+        $this->assertEquals(new Author('John Doe'), $post->author);
         $this->assertEquals('http://fakeimg.pl/300x300', $post->picture);
         $this->assertCount(2, $post->comments);
-        $this->assertContainsOnlyInstancesOf(Comment::class, $post->comments);
-        $this->assertEquals('Lorem ipsum', $post->comments[0]->body);
-        $this->assertEquals('Sit dolor amet', $post->comments[1]->body);
+        $this->assertEquals(new Comment('Lorem ipsum', new Author('Jane Doe'), new \DateTime('2000-01-01T00:00:00+01:00')), $post->comments[0]);
+        $this->assertEquals(new Comment('Sit dolor amet', new Author('Jane Doe'), new \DateTime('2000-01-01T00:00:00+01:00')), $post->comments[1]);
         $this->assertEquals(['php'], $post->tags);
         $this->assertEquals((object) ['ogTitle' => 'Lorem ipsum'], $post->opengraph);
         $this->assertEquals(301, $post->views);
         $this->assertEquals(true, $post->highlight);
         $this->assertEquals(Status::Published, $post->status);
-        $this->assertInstanceOf(\DateTime::class, $post->creationDate);
-        $this->assertEquals('2000-01-01T00:00:00+0100', $post->creationDate->format(\DateTime::ISO8601));
-        $this->assertInstanceOf(\DateTime::class, $post->modificationDate);
-        $this->assertEquals('2000-01-02T00:00:00+0100', $post->modificationDate->format(\DateTime::ISO8601));
-    }
-
-    public function testDenormalizeWithDefaultValues()
-    {
-        $post = $this->denormalizer->denormalize(['title' => 'Lorem ipsum', 'author' => ['name' => 'Cyril']], Post::class);
-
-        $this->assertEquals('Lorem ipsum', $post->title);
-        $this->assertInstanceOf(Author::class, $post->author);
-        $this->assertEquals('Cyril', $post->author->name);
-        $this->assertNull($post->picture);
-        $this->assertCount(0, $post->comments);
-        $this->assertCount(0, $post->tags);
-        $this->assertEquals(new \stdClass(), $post->opengraph);
-        $this->assertEquals(0, $post->views);
-        $this->assertEquals(false, $post->highlight);
-        $this->assertEquals(Status::Draft, $post->status);
-        $this->assertInstanceOf(\DateTime::class, $post->creationDate);
-        $this->assertEquals(time(), $post->creationDate->getTimestamp());
-        $this->assertInstanceOf(\DateTime::class, $post->modificationDate);
-        $this->assertEquals(time(), $post->modificationDate->getTimestamp());
-    }
-
-    public function testGetMetadata()
-    {
-        $metadata = $this->denormalizer->getMetadata(Post::class);
-
-        $expected = [
-            ['title', 'string', false, true, null],
-            ['author', Author::class, false, true, null],
-            ['picture', 'string', true, false, null],
-            ['comments', \ArrayIterator::class, false, false, Comment::class],
-            ['tags', 'array', false, false, null],
-            ['views', 'int', false, false, null],
-            ['highlight', 'bool', false, false, null],
-            ['opengraph', 'object', false, false, null],
-            ['status', Status::class, false, false, null],
-            ['creationDate', \DateTime::class, false, false, null],
-            ['modificationDate', \DateTime::class, false, false, null],
-        ];
-
-        foreach ($metadata->properties as $i => $property) {
-            [$name, $type, $nullable, $required, $collectionOf] = $expected[$i];
-            $this->assertEquals($name, $property->name);
-            $this->assertEquals($type, $property->type);
-            $this->assertEquals($nullable, $property->nullable);
-            $this->assertEquals($required, $property->required);
-            $this->assertEquals($collectionOf, $property->collectionOf);
-        }
+        $this->assertEquals(new \DateTime('2000-01-01T00:00:00+01:00'), $post->creationDate);
+        $this->assertEquals(new \DateTime('2000-01-02T00:00:00+01:00'), $post->modificationDate);
     }
 }
