@@ -3,6 +3,7 @@
 namespace Cyve\JsonDecoder\Tests;
 
 use Cyve\JsonDecoder\Attribute\Collection;
+use Cyve\JsonDecoder\Denormalizer;
 use Cyve\JsonDecoder\JsonSerializableTrait;
 use Cyve\JsonDecoder\Metadata\Metadata;
 use PHPUnit\Framework\TestCase;
@@ -123,7 +124,7 @@ class ObjectWithCollectionProperties
 
 class ObjectWithOptions
 {
-    use JsonSerializableTrait { denormalize as denormalizeWithoutOptions; }
+    use JsonSerializableTrait;
 
     public function __construct(
         public string $name,
@@ -133,18 +134,20 @@ class ObjectWithOptions
 
     public static function denormalize(mixed $data): mixed
     {
+        $denormalizer = new Denormalizer();
+
         $options = $data->options ?? [];
         unset($data->options);
 
-        $normalized = self::denormalizeWithoutOptions($data);
+        $normalized = $denormalizer->denormalize($data, static::class);
 
         foreach ($options as $code => $option) {
-            $optionType = match ($code) {
+            $optionClassname = match ($code) {
                 'foo' => Foo::class,
                 'bar' => Bar::class,
             };
 
-            $normalized->options[$code] = $optionType::denormalize($option);
+            $normalized->options[$code] = $denormalizer->denormalize($option, $optionClassname);
         }
 
         return $normalized;

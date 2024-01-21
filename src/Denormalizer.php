@@ -16,62 +16,35 @@ class Denormalizer
     /**
      * TODO:
      * - interfaces
-     * - PHP native classes (DateInterval, SplObjectStorage, etc.)
      */
-    public function denormalize(mixed $input, string $type): mixed
+    public function denormalize(mixed $normalized, string $type): mixed
     {
-        // scalar or object
-        $scalarTypes = ['int' => 'int', 'float' => 'float', 'string' => 'string', 'bool' => 'bool'];
-        if (array_key_exists($type, $scalarTypes) || 'object' === $type) {
-            return $input;
-        }
-
-        // enum
-        if (is_subclass_of($type, \BackedEnum::class)) {
-            return $type::from($input);
-        }
-
-        // DateTime
-        if (is_subclass_of($type, \DateTimeInterface::class) && is_string($input)) {
-            return new $type($input);
-        }
-
-        // DateTimeZone
-        if ($type === \DateTimeZone::class && is_string($input)) {
-            return new \DateTimeZone($input);
-        }
-
-        // DateInterval
-        if ($type === \DateInterval::class && is_string($input)) {
-            return new \DateInterval($input);
-        }
-
-        // array of scalars
-        if ('array' === $type && array_is_list($input) && array_key_exists(gettype($input[0]), $scalarTypes)) {
-            return $input;
-        }
-
-        // other types
         if (!class_exists($type)) {
-            throw new \RuntimeException(sprintf('Unsupported type "%s"', $type));
+            throw new \LogicException(sprintf('Class "%s" not found', $type));
         }
 
         $metadata = $this->metadataRegistry->get($type);
+
+        // use serialized data as first argument for value objects and stringable
+        if (is_scalar($normalized)) {
+            $firstPropertyName = $metadata->properties[0]->name;
+            $normalized = (object) [$firstPropertyName => $normalized];
+        }
 
         $arguments = [];
         foreach ($metadata->properties as $property) {
             try {
                 // if no value is provided, then throw error or fallback to default value
-                if (!property_exists($input, $property->name)) {
+                if (!property_exists($normalized, $property->name)) {
                     if ($property->required) {
                         throw new \RuntimeException('undefined value');
                     }
                     continue;
                 }
 
-                $value = $input->{$property->name};
+                $value = $normalized->{$property->name};
 
-                // if the property is a collection
+                // collection
                 if (null !== $property->collectionOf) {
                     $arguments[$property->name] = ($property->type === 'array') ? [] : new $property->type();
                     foreach ($value as $key => $element) {
@@ -80,21 +53,28 @@ class Denormalizer
                     continue;
                 }
 
-                // if the property class overwrite JsonDecodableTrait::denormalize();
-                if (class_exists($property->type)
-                    && array_key_exists(JsonSerializableTrait::class, class_uses($property->type))
-                    && method_exists($property->type, 'denormalize')) {
-                    $arguments[$property->name] = $property->type::denormalize($value);
+                // enum
+                if (is_subclass_of($property->type, \BackedEnum::class)) {
+                    $arguments[$property->name] = $property->type::from($value);
                     continue;
                 }
 
-                // else for other properties
-                $arguments[$property->name] = $this->denormalize($value, $property->type);
+                // object
+                if (class_exists($property->type)) {
+                    if (method_exists($property->type, 'denormalize')) {
+                        $arguments[$property->name] = $property->type::denormalize($normalized);
+                    }
+
+                    $arguments[$property->name] = $this->denormalize($value, $property->type);
+                    continue;
+                }
+
+                // other properties
+                $arguments[$property->name] = $value;
             } catch (\Throwable $e) {
                 throw new DenormalizationException($property->name, null, $e);
             }
         }
-        // dump($arguments);
 
         try {
             return new $type(...$arguments);

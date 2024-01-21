@@ -20,8 +20,7 @@ class Post implements \JsonSerializable
         public bool $highlight = false,
         public object $opengraph = new \stdClass(),
         public Status $status = Status::Draft,
-        public \DateTimeImmutable $creationDate = new \DateTimeImmutable(),
-        public \DateTime $modificationDate = new \DateTime(),
+        public Date $creationDate = new Date(),
     ) {
     }
 
@@ -37,8 +36,7 @@ class Post implements \JsonSerializable
             highlight: true,
             opengraph: (object) ['ogTitle' => 'Lorem ipsum'],
             status: Status::Published,
-            creationDate: new \DateTimeImmutable('1970-01-01 00:00'),
-            modificationDate: new \DateTime('1970-01-01 00:00')
+            creationDate: new Date('1970-01-01 00:00'),
         );
     }
 }
